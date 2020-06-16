@@ -14,20 +14,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-ARG SPARK_BASE_IMAGE=seedjeffwan/spark:v2.4.5
+ARG SPARK_BASE_IMAGE=gcr.io/dm-docker/spark-gcs:3.0.0
 
-FROM amazonlinux:2 as builder
+FROM ${SPARK_BASE_IMAGE} as builder
 
 ENV TPCDS_KIT_VERSION "master"
 
-RUN yum group install -y "Development Tools" && \
+RUN apt-get update && \
+    apt-get install -y gcc make flex bison byacc git && \
     git clone https://github.com/databricks/tpcds-kit.git -b ${TPCDS_KIT_VERSION} /tmp/tpcds-kit && \
     cd /tmp/tpcds-kit/tools && \
     make OS=LINUX
 
 FROM ${SPARK_BASE_IMAGE}
-LABEL maintainer="Jiaxin Shan <seedjeffwan@gmail.com>"
 
 # Copy tpcds-kit and benchmark library
 COPY --from=builder /tmp/tpcds-kit/tools /opt/tpcds-kit/tools
-COPY ./target/scala-2.11/*jar ${SPARK_HOME}/examples/jars/
+COPY ./target/scala-2.12/*jar ${SPARK_HOME}/examples/jars/
