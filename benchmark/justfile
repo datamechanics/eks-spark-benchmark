@@ -1,0 +1,6 @@
+registry := 'gcr.io/dm-docker'
+
+build-and-push tag='3.0.0-0.1':
+    sbt assembly
+    docker build -t {{registry}}/spark-benchmark:{{tag}} .
+    docker push {{registry}}/spark-benchmark:{{tag}}
