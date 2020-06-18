@@ -83,7 +83,13 @@ run-benchmark scale='10' iterations='1' optimize='false' queries='':
                 "cores": 4,
                 "coreRequest": "3500m",
                 "memory": "23g",
-                "instances": 6
+                "instances": 6,
+                "volumeMounts": [
+                    {
+                        "mountPath": "/tmp/spark-local-dir-1/",
+                        "name": "spark-local-dir-1"
+                    }
+                ]
             },
             "driver": {
                 "cores": 3,
@@ -92,6 +98,14 @@ run-benchmark scale='10' iterations='1' optimize='false' queries='':
                     "beta.kubernetes.io/instance-type": "n1-standard-4"
                 }
             },
+            "volumes": [
+                {
+                    "name": "spark-local-dir-1",
+                    "hostPath": {
+                        "path": "/mnt/disks/ssd0/"
+                    }
+                }
+            ],
             "sparkConf": {
                 "spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version": "2",
                 "spark.speculation": "false",
@@ -102,7 +116,8 @@ run-benchmark scale='10' iterations='1' optimize='false' queries='':
                 "spark.sql.parquet.filterPushdown": "true",
                 "spark.dynamicAllocation.enabled": "false",
                 "spark.scheduler.minRegisteredResourcesRatio": "1.0",
-                "spark.scheduler.maxRegisteredResourcesWaitingTime": "3600s"
+                "spark.scheduler.maxRegisteredResourcesWaitingTime": "3600s",
+                "spark.local.dir": "/tmp/spark-local-dir-1/"
             }
         }
     }'
