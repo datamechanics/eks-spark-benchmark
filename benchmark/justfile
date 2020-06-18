@@ -83,7 +83,7 @@ run-benchmark scale='10' iterations='1' optimize='false' queries='':
                 "cores": 4,
                 "coreRequest": "3500m",
                 "memory": "23g",
-                "instances": 6,
+                "instances": 5,
                 "volumeMounts": [
                     {
                         "mountPath": "/tmp/spark-local-dir-1/",
