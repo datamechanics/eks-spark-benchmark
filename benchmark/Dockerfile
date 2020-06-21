@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-ARG SPARK_BASE_IMAGE=gcr.io/dm-docker/spark-gcs:3.0.0
+ARG SPARK_BASE_IMAGE=gcr.io/dm-docker/spark-gcs:3.0.0-jrj-d-dev
 
 FROM ${SPARK_BASE_IMAGE} as builder
 

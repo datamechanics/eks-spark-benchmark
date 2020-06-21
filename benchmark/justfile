@@ -4,7 +4,7 @@ api-key := ''
 data-folder := 'gs://dm-tpc-benchmark/tpc-ds/data'
 result-folder := 'gs://dm-tpc-benchmark/tpc-ds/result'
 
-build-and-push tag='3.0.0-0.1':
+build-and-push tag='3.0.0-0.2':
     sbt assembly
     docker build -t {{registry}}/spark-benchmark:{{tag}} .
     docker push {{registry}}/spark-benchmark:{{tag}}
@@ -24,7 +24,7 @@ generate-data scale partitions aggregate:
         "configOverrides": {
             "type": "Scala",
             "sparkVersion": "3.0.0",
-            "image": "gcr.io/dm-docker/spark-benchmark:3.0.0-0.1",
+            "image": "gcr.io/dm-docker/spark-benchmark:3.0.0-0.2",
             "imagePullPolicy": "Always",
             "mainApplicationFile": "local:///opt/spark/examples/jars/eks-spark-benchmark-assembly-1.0.jar",
             "mainClass": "com.amazonaws.eks.tpcds.DataGeneration",
@@ -64,7 +64,7 @@ run-benchmark scale='10' iterations='1' optimize='false' queries='':
         "configOverrides": {
             "type": "Scala",
             "sparkVersion": "3.0.0",
-            "image": "gcr.io/dm-docker/spark-benchmark:3.0.0-0.1",
+            "image": "gcr.io/dm-docker/spark-benchmark:3.0.0-0.2",
             "imagePullPolicy": "Always",
             "mainApplicationFile": "local:///opt/spark/examples/jars/eks-spark-benchmark-assembly-1.0.jar",
             "mainClass": "com.amazonaws.eks.tpcds.BenchmarkSQL",
