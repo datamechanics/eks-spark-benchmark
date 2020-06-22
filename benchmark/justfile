@@ -121,3 +121,57 @@ run-benchmark scale='10' iterations='1' optimize='false' queries='':
             }
         }
     }'
+
+run-benchmark-no-ssd scale='10' iterations='1' optimize='false' queries='':
+    #!/usr/bin/env bash
+    INPUT_FOLDER="{{scale}}-aggregated"
+    curl --location --request POST 'https://{{cluster}}/api/apps/' \
+    --header 'Content-Type: application/json' \
+    --header 'X-Api-Key: {{api-key}}' \
+    --data-raw '{
+        "jobName": "tpcds-queries-{{scale}}-{{optimize}}",
+        "configOverrides": {
+            "type": "Scala",
+            "sparkVersion": "3.0.0",
+            "image": "gcr.io/dm-docker/spark-benchmark:3.0.0-0.2",
+            "imagePullPolicy": "Always",
+            "mainApplicationFile": "local:///opt/spark/examples/jars/eks-spark-benchmark-assembly-1.0.jar",
+            "mainClass": "com.amazonaws.eks.tpcds.BenchmarkSQL",
+            "arguments": [
+                "{{data-folder}}/'"$INPUT_FOLDER"'",
+                "{{result-folder}}/'"$INPUT_FOLDER-$(date +'%s')"'",
+                "/opt/tpcds-kit/tools",
+                "parquet",
+                "{{scale}}",
+                "{{iterations}}",
+                "{{optimize}}",
+                "{{queries}}",
+                "false"
+            ],
+            "executor": {
+                "cores": 4,
+                "coreRequest": "3500m",
+                "memory": "23g",
+                "instances": 5
+            },
+            "driver": {
+                "cores": 3,
+                "memory": "10g",
+                "nodeSelector": {
+                    "beta.kubernetes.io/instance-type": "n1-standard-4"
+                }
+            },
+            "sparkConf": {
+                "spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version": "2",
+                "spark.speculation": "false",
+                "spark.network.timeout": "2400",
+                "spark.sql.broadcastTimeout": "7200",
+                "spark.sql.crossJoin.enabled": "true",
+                "spark.sql.parquet.mergeSchema": "false",
+                "spark.sql.parquet.filterPushdown": "true",
+                "spark.dynamicAllocation.enabled": "false",
+                "spark.scheduler.minRegisteredResourcesRatio": "1.0",
+                "spark.scheduler.maxRegisteredResourcesWaitingTime": "3600s"
+            }
+        }
+    }'
