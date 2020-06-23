@@ -3,6 +3,7 @@ cluster := 'demo-staging.datamechanics.co'
 api-key := ''
 data-folder := 'gs://dm-tpc-benchmark/tpc-ds/data'
 result-folder := 'gs://dm-tpc-benchmark/tpc-ds/result'
+resource-folder := 'gs://dm-tpc-benchmark/tpc-ds/resource'
 
 build-and-push tag='3.0.0-0.2':
     sbt assembly
@@ -53,7 +54,7 @@ generate-data scale partitions aggregate:
         }
     }'
 
-run-benchmark scale='10' iterations='1' optimize='false' queries='':
+run-k8s-benchmark scale='10' iterations='1' optimize='false' queries='':
     #!/usr/bin/env bash
     INPUT_FOLDER="{{scale}}-aggregated"
     curl --location --request POST 'https://{{cluster}}/api/apps/' \
@@ -122,7 +123,7 @@ run-benchmark scale='10' iterations='1' optimize='false' queries='':
         }
     }'
 
-run-benchmark-no-ssd scale='10' iterations='1' optimize='false' queries='':
+run-k8s-benchmark-no-ssd scale='10' iterations='1' optimize='false' queries='':
     #!/usr/bin/env bash
     INPUT_FOLDER="{{scale}}-aggregated"
     curl --location --request POST 'https://{{cluster}}/api/apps/' \
@@ -175,3 +176,58 @@ run-benchmark-no-ssd scale='10' iterations='1' optimize='false' queries='':
             }
         }
     }'
+
+upload-yarn-resources:
+    gsutil cp 'target/scala-2.12/*.jar' '{{resource-folder}}/jars/'
+    gsutil cp dataproc-init-script.sh '{{resource-folder}}/init-scripts/dataproc-init-script.sh'
+
+run-yarn-benchmark scale='10' iterations='1' optimize='false' queries='':
+    #!/usr/bin/env bash
+    INPUT_FOLDER="{{scale}}-aggregated"
+    WORKFLOW_TEMPLATE_NAME=tpcds-queries-{{scale}}-{{optimize}}
+    LOCATION=europe-west1
+    gcloud -q dataproc workflow-templates delete $WORKFLOW_TEMPLATE_NAME --region $LOCATION || true
+    gcloud dataproc workflow-templates create $WORKFLOW_TEMPLATE_NAME --region=$LOCATION
+    gcloud dataproc workflow-templates set-managed-cluster $WORKFLOW_TEMPLATE_NAME \
+        --initialization-actions {{resource-folder}}/init-scripts/dataproc-init-script.sh \
+        --region $LOCATION \
+        --image-version preview \
+        --master-machine-type n1-standard-4 \
+        --worker-machine-type n2-highmem-4 \
+        --num-workers 5 \
+        --num-worker-local-ssds 1 \
+        --cluster-name $WORKFLOW_TEMPLATE_NAME-cluster \
+        --properties "\
+    spark:spark.driver.cores=3,\
+    spark:spark.driver.memory=10g,\
+    spark:spark.executor.cores=4,\
+    spark:spark.executor.memory=21g,\
+    spark:spark.kubernetes.executor.request.cores=3500m,\
+    spark:spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version=2,\
+    spark:spark.speculation=false,\
+    spark:spark.network.timeout=2400,\
+    spark:spark.sql.broadcastTimeout=7200,\
+    spark:spark.sql.crossJoin.enabled=true,\
+    spark:spark.sql.parquet.mergeSchema=false,\
+    spark:spark.sql.parquet.filterPushdown=true,\
+    spark:spark.dynamicAllocation.enabled=false,\
+    spark:spark.scheduler.minRegisteredResourcesRatio=1.0,\
+    spark:spark.scheduler.maxRegisteredResourcesWaitingTime=3600s,\
+    spark:spark.local.dir=/mnt/ssd0/"
+    gcloud dataproc workflow-templates add-job spark \
+        --jars {{resource-folder}}/jars/eks-spark-benchmark-assembly-1.0.jar \
+        --class com.amazonaws.eks.tpcds.BenchmarkSQL \
+        --step-id run-queries \
+        --region $LOCATION \
+        --workflow-template $WORKFLOW_TEMPLATE_NAME \
+        -- \
+        {{data-folder}}/$INPUT_FOLDER \
+        {{result-folder}}/$INPUT_FOLDER-$(date +'%s') \
+        /opt/tpcds-kit/tools \
+        parquet \
+        {{scale}} \
+        {{iterations}} \
+        {{optimize}} \
+        "{{queries}}" \
+        false
+    gcloud dataproc workflow-templates instantiate $WORKFLOW_TEMPLATE_NAME --region $LOCATION
