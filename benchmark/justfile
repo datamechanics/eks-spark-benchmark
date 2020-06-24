@@ -188,9 +188,10 @@ run-yarn-benchmark scale='10' iterations='1' optimize='false' queries='':
     LOCATION=europe-west1
     gcloud -q dataproc workflow-templates delete $WORKFLOW_TEMPLATE_NAME --region $LOCATION || true
     gcloud dataproc workflow-templates create $WORKFLOW_TEMPLATE_NAME --region=$LOCATION
-    gcloud dataproc workflow-templates set-managed-cluster $WORKFLOW_TEMPLATE_NAME \
+    gcloud beta dataproc workflow-templates set-managed-cluster $WORKFLOW_TEMPLATE_NAME \
         --initialization-actions {{resource-folder}}/init-scripts/dataproc-init-script.sh \
         --region $LOCATION \
+        --enable-component-gateway \
         --image-version preview \
         --master-machine-type n1-standard-4 \
         --worker-machine-type n2-highmem-4 \
@@ -200,6 +201,7 @@ run-yarn-benchmark scale='10' iterations='1' optimize='false' queries='':
         --properties "\
     spark:spark.driver.cores=3,\
     spark:spark.driver.memory=10g,\
+    spark:spark.executor.instances=5,\
     spark:spark.executor.cores=4,\
     spark:spark.executor.memory=21g,\
     spark:spark.kubernetes.executor.request.cores=3500m,\
@@ -213,7 +215,9 @@ run-yarn-benchmark scale='10' iterations='1' optimize='false' queries='':
     spark:spark.dynamicAllocation.enabled=false,\
     spark:spark.scheduler.minRegisteredResourcesRatio=1.0,\
     spark:spark.scheduler.maxRegisteredResourcesWaitingTime=3600s,\
-    spark:spark.local.dir=/mnt/ssd0/"
+    spark:spark.sql.optimizer.dynamicPartitionPruning.enabled=true,\
+    spark:spark.eventLog.dir=gs://dm-tpc-benchmark/tpc-ds/event-logs,\
+    spark:spark.eventLog.enabled=true"
     gcloud dataproc workflow-templates add-job spark \
         --jars {{resource-folder}}/jars/eks-spark-benchmark-assembly-1.0.jar \
         --class com.amazonaws.eks.tpcds.BenchmarkSQL \
