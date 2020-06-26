@@ -123,6 +123,75 @@ run-k8s-benchmark scale='10' iterations='1' optimize='false' queries='':
         }
     }'
 
+run-k8s-benchmark-dummy-hostpath scale='10' iterations='1' optimize='false' queries='':
+    #!/usr/bin/env bash
+    INPUT_FOLDER="{{scale}}-aggregated"
+    curl --location --request POST 'https://{{cluster}}/api/apps/' \
+    --header 'Content-Type: application/json' \
+    --header 'X-Api-Key: {{api-key}}' \
+    --data-raw '{
+        "jobName": "tpcds-queries-{{scale}}-{{optimize}}",
+        "configOverrides": {
+            "type": "Scala",
+            "sparkVersion": "3.0.0",
+            "image": "gcr.io/dm-docker/spark-benchmark:3.0.0-0.2",
+            "imagePullPolicy": "Always",
+            "mainApplicationFile": "local:///opt/spark/examples/jars/eks-spark-benchmark-assembly-1.0.jar",
+            "mainClass": "com.amazonaws.eks.tpcds.BenchmarkSQL",
+            "arguments": [
+                "{{data-folder}}/'"$INPUT_FOLDER"'",
+                "{{result-folder}}/'"$INPUT_FOLDER-$(date +'%s')"'",
+                "/opt/tpcds-kit/tools",
+                "parquet",
+                "{{scale}}",
+                "{{iterations}}",
+                "{{optimize}}",
+                "{{queries}}",
+                "false"
+            ],
+            "executor": {
+                "cores": 4,
+                "coreRequest": "3500m",
+                "memory": "23g",
+                "instances": 5,
+                "volumeMounts": [
+                    {
+                        "mountPath": "/tmp/spark-local-dir-1/",
+                        "name": "spark-local-dir-1"
+                    }
+                ]
+            },
+            "driver": {
+                "cores": 3,
+                "memory": "10g",
+                "nodeSelector": {
+                    "beta.kubernetes.io/instance-type": "n1-standard-4"
+                }
+            },
+            "volumes": [
+                {
+                    "name": "spark-local-dir-1",
+                    "hostPath": {
+                        "path": "/tmp/spark-scratch/"
+                    }
+                }
+            ],
+            "sparkConf": {
+                "spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version": "2",
+                "spark.speculation": "false",
+                "spark.network.timeout": "2400",
+                "spark.sql.broadcastTimeout": "7200",
+                "spark.sql.crossJoin.enabled": "true",
+                "spark.sql.parquet.mergeSchema": "false",
+                "spark.sql.parquet.filterPushdown": "true",
+                "spark.dynamicAllocation.enabled": "false",
+                "spark.scheduler.minRegisteredResourcesRatio": "1.0",
+                "spark.scheduler.maxRegisteredResourcesWaitingTime": "3600s",
+                "spark.local.dir": "/tmp/spark-local-dir-1/"
+            }
+        }
+    }'
+
 run-k8s-benchmark-no-ssd scale='10' iterations='1' optimize='false' queries='':
     #!/usr/bin/env bash
     INPUT_FOLDER="{{scale}}-aggregated"
@@ -197,6 +266,60 @@ run-yarn-benchmark scale='10' iterations='1' optimize='false' queries='':
         --worker-machine-type n2-highmem-4 \
         --num-workers 5 \
         --num-worker-local-ssds 1 \
+        --cluster-name $WORKFLOW_TEMPLATE_NAME-cluster \
+        --properties "\
+    spark:spark.driver.cores=3,\
+    spark:spark.driver.memory=10g,\
+    spark:spark.executor.instances=5,\
+    spark:spark.executor.cores=4,\
+    spark:spark.executor.memory=21g,\
+    spark:spark.kubernetes.executor.request.cores=3500m,\
+    spark:spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version=2,\
+    spark:spark.speculation=false,\
+    spark:spark.network.timeout=2400,\
+    spark:spark.sql.broadcastTimeout=7200,\
+    spark:spark.sql.crossJoin.enabled=true,\
+    spark:spark.sql.parquet.mergeSchema=false,\
+    spark:spark.sql.parquet.filterPushdown=true,\
+    spark:spark.dynamicAllocation.enabled=false,\
+    spark:spark.scheduler.minRegisteredResourcesRatio=1.0,\
+    spark:spark.scheduler.maxRegisteredResourcesWaitingTime=3600s,\
+    spark:spark.sql.optimizer.dynamicPartitionPruning.enabled=true,\
+    spark:spark.eventLog.dir=gs://dm-tpc-benchmark/tpc-ds/event-logs,\
+    spark:spark.eventLog.enabled=true"
+    gcloud dataproc workflow-templates add-job spark \
+        --jars {{resource-folder}}/jars/eks-spark-benchmark-assembly-1.0.jar \
+        --class com.amazonaws.eks.tpcds.BenchmarkSQL \
+        --step-id run-queries \
+        --region $LOCATION \
+        --workflow-template $WORKFLOW_TEMPLATE_NAME \
+        -- \
+        {{data-folder}}/$INPUT_FOLDER \
+        {{result-folder}}/$INPUT_FOLDER-$(date +'%s') \
+        /opt/tpcds-kit/tools \
+        parquet \
+        {{scale}} \
+        {{iterations}} \
+        {{optimize}} \
+        "{{queries}}" \
+        false
+    gcloud dataproc workflow-templates instantiate $WORKFLOW_TEMPLATE_NAME --region $LOCATION
+
+run-yarn-benchmark-no-ssd scale='10' iterations='1' optimize='false' queries='':
+    #!/usr/bin/env bash
+    INPUT_FOLDER="{{scale}}-aggregated"
+    WORKFLOW_TEMPLATE_NAME=tpcds-queries-{{scale}}-{{optimize}}
+    LOCATION=europe-west1
+    gcloud -q dataproc workflow-templates delete $WORKFLOW_TEMPLATE_NAME --region $LOCATION || true
+    gcloud dataproc workflow-templates create $WORKFLOW_TEMPLATE_NAME --region=$LOCATION
+    gcloud beta dataproc workflow-templates set-managed-cluster $WORKFLOW_TEMPLATE_NAME \
+        --initialization-actions {{resource-folder}}/init-scripts/dataproc-init-script.sh \
+        --region $LOCATION \
+        --enable-component-gateway \
+        --image-version preview \
+        --master-machine-type n1-standard-4 \
+        --worker-machine-type n2-highmem-4 \
+        --num-workers 5 \
         --cluster-name $WORKFLOW_TEMPLATE_NAME-cluster \
         --properties "\
     spark:spark.driver.cores=3,\
